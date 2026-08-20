@@ -31,6 +31,7 @@ import com.owncloud.android.R
 import com.owncloud.android.domain.authentication.oauth.RegisterClientUseCase
 import com.owncloud.android.domain.authentication.oauth.RequestTokenUseCase
 import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationInfo
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 import com.owncloud.android.domain.authentication.oauth.model.TokenRequest
 import com.owncloud.android.domain.authentication.oauth.model.TokenResponse
 import com.owncloud.android.domain.authentication.usecases.GetBaseUrlUseCase
@@ -231,11 +232,13 @@ class AuthenticationViewModel(
     )
 
     fun registerClient(
-        registrationEndpoint: String
+        registrationEndpoint: String,
+        tokenEndpointAuthMethod: OAuthClientAuthenticationMethod,
     ) {
         val registrationRequest = OAuthUtils.buildClientRegistrationRequest(
             registrationEndpoint = registrationEndpoint,
-            MainApp.appContext
+            context = MainApp.appContext,
+            tokenEndpointAuthMethod = tokenEndpointAuthMethod,
         )
 
         runUseCaseWithResult(

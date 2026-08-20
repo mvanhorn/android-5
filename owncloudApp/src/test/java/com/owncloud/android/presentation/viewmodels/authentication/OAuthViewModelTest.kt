@@ -19,12 +19,15 @@
 
 package com.owncloud.android.presentation.viewmodels.authentication
 
+import android.content.Context
+import com.owncloud.android.MainApp
 import com.owncloud.android.presentation.authentication.oauth.OAuthUtils
 import com.owncloud.android.domain.UseCaseResult
 import com.owncloud.android.domain.authentication.oauth.OIDCDiscoveryUseCase
 import com.owncloud.android.domain.authentication.oauth.RegisterClientUseCase
 import com.owncloud.android.domain.authentication.oauth.RequestTokenUseCase
 import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 import com.owncloud.android.domain.authentication.oauth.model.TokenResponse
 import com.owncloud.android.domain.exceptions.ServerNotReachableException
 import com.owncloud.android.domain.utils.Event
@@ -34,12 +37,16 @@ import com.owncloud.android.presentation.authentication.oauth.OAuthViewModel
 import com.owncloud.android.providers.ContextProvider
 import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BASIC_AUTH
 import com.owncloud.android.testutil.oauth.OC_OIDC_SERVER_CONFIGURATION
+import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION
+import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION_REQUEST
 import com.owncloud.android.testutil.oauth.OC_TOKEN_REQUEST_ACCESS
 import com.owncloud.android.testutil.oauth.OC_TOKEN_REQUEST_REFRESH
 import com.owncloud.android.testutil.oauth.OC_TOKEN_RESPONSE
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
+import io.mockk.mockkObject
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -81,6 +88,15 @@ class OAuthViewModelTest : ViewModelTest() {
         }
 
         mockkConstructor(OAuthUtils::class)
+        mockkObject(MainApp.Companion)
+        mockkObject(OAuthUtils.Companion)
+        every { MainApp.appContext } returns mockk<Context>(relaxed = true)
+        every { OAuthUtils.buildClientRegistrationRequest(any(), any(), any()) } answers {
+            OC_CLIENT_REGISTRATION_REQUEST.copy(
+                registrationEndpoint = firstArg(),
+                tokenEndpointAuthMethod = thirdArg<OAuthClientAuthenticationMethod>().value
+            )
+        }
         every { anyConstructed<OAuthUtils>().generateRandomCodeVerifier() } returns "CODE VERIFIER"
         every { anyConstructed<OAuthUtils>().generateCodeChallenge(any()) } returns "CODE CHALLENGE"
         every { anyConstructed<OAuthUtils>().generateRandomState() } returns "STATE"
@@ -174,5 +190,18 @@ class OAuthViewModelTest : ViewModelTest() {
             expectedValues = listOf(Event<UIResult<TokenResponse>>(UIResult.Error(commonException))),
             liveData = oAuthViewModel.requestToken
         )
+    }
+
+    @Test
+    fun `register client forwards selected authentication method`() = runTest {
+        val authenticationMethod = OAuthClientAuthenticationMethod.CLIENT_SECRET_POST
+        val expectedRequest = OC_CLIENT_REGISTRATION_REQUEST.copy(tokenEndpointAuthMethod = authenticationMethod.value)
+        every { registerClientUseCase(RegisterClientUseCase.Params(expectedRequest)) } returns
+            UseCaseResult.Success(OC_CLIENT_REGISTRATION.copy(tokenEndpointAuthMethod = authenticationMethod))
+
+        oAuthViewModel.registerClient(expectedRequest.registrationEndpoint, authenticationMethod)
+        advanceUntilIdle()
+
+        verify(exactly = 1) { registerClientUseCase(RegisterClientUseCase.Params(expectedRequest)) }
     }
 }

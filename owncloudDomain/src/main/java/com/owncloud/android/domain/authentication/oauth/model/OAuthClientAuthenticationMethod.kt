@@ -1,8 +1,7 @@
 /**
  * ownCloud Android client application
  *
- * @author Abel García de Prada
- * Copyright (C) 2021 ownCloud GmbH.
+ * Copyright (C) 2026 ownCloud GmbH.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2,
@@ -19,15 +18,17 @@
 
 package com.owncloud.android.domain.authentication.oauth.model
 
-data class ClientRegistrationRequest(
-    val registrationEndpoint: String,
-    val clientName: String,
-    val redirectUris: List<String>,
-    val tokenEndpointAuthMethod: String = OAuthClientAuthenticationMethod.CLIENT_SECRET_BASIC.value,
-    val applicationType: String = CLIENT_REGISTRATION_APPLICATION_TYPE
+enum class OAuthClientAuthenticationMethod(
+    val value: String,
+    val useAuthorizationHeader: Boolean,
 ) {
+    CLIENT_SECRET_BASIC("client_secret_basic", true),
+    CLIENT_SECRET_POST("client_secret_post", false),
+    ;
 
     companion object {
-        private const val CLIENT_REGISTRATION_APPLICATION_TYPE = "native"
+        @JvmStatic
+        fun fromValueOrDefault(value: String?): OAuthClientAuthenticationMethod =
+            if (value == CLIENT_SECRET_POST.value) CLIENT_SECRET_POST else CLIENT_SECRET_BASIC
     }
 }

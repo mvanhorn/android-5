@@ -38,6 +38,7 @@ import com.owncloud.android.data.authentication.QUERY_PARAMETER_SCOPE
 import com.owncloud.android.data.authentication.QUERY_PARAMETER_STATE
 import com.owncloud.android.data.authentication.QUERY_PARAMETER_USER
 import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationRequest
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -77,12 +78,14 @@ class OAuthUtils {
 
         fun buildClientRegistrationRequest(
             registrationEndpoint: String,
-            context: Context
+            context: Context,
+            tokenEndpointAuthMethod: OAuthClientAuthenticationMethod,
         ): ClientRegistrationRequest =
             ClientRegistrationRequest(
                 registrationEndpoint = registrationEndpoint,
                 clientName = MainApp.userAgent,
-                redirectUris = listOf(buildRedirectUri(context).toString())
+                redirectUris = listOf(buildRedirectUri(context).toString()),
+                tokenEndpointAuthMethod = tokenEndpointAuthMethod.value,
             )
 
         fun getClientAuth(

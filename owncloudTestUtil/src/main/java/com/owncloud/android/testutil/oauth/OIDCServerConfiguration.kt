@@ -21,6 +21,7 @@
 package com.owncloud.android.testutil.oauth
 
 import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 
 val OC_OIDC_SERVER_CONFIGURATION = OIDCServerConfiguration(
     authorizationEndpoint = "https://owncloud.server/authorize",
@@ -43,7 +44,10 @@ val OC_OIDC_SERVER_CONFIGURATION = OIDCServerConfiguration(
         "konnect/uuid"
     ),
     tokenEndpoint = "https://owncloud.server/token",
-    tokenEndpointAuthMethodsSupported = listOf(),
+    tokenEndpointAuthMethodsSupported = listOf(
+        OAuthClientAuthenticationMethod.CLIENT_SECRET_BASIC.value,
+        OAuthClientAuthenticationMethod.CLIENT_SECRET_POST.value,
+    ),
     userInfoEndpoint = "https://owncloud.server/userinfo"
 )
 

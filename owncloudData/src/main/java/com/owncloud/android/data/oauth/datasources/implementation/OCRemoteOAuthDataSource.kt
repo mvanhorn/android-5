@@ -28,6 +28,7 @@ import com.owncloud.android.data.oauth.datasources.RemoteOAuthDataSource
 import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationInfo
 import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationRequest
 import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 import com.owncloud.android.domain.authentication.oauth.model.TokenRequest
 import com.owncloud.android.domain.authentication.oauth.model.TokenResponse
 import com.owncloud.android.lib.resources.oauth.params.ClientRegistrationParams
@@ -80,7 +81,9 @@ class OCRemoteOAuthDataSource(
             )
         }
 
-        return remoteClientRegistrationInfo.toModel()
+        return remoteClientRegistrationInfo.toModel(
+            OAuthClientAuthenticationMethod.fromValueOrDefault(clientRegistrationRequest.tokenEndpointAuthMethod)
+        )
     }
 
     /**************************************************************************************************************
@@ -148,11 +151,14 @@ class OCRemoteOAuthDataSource(
             applicationType = this.applicationType
         )
 
-    private fun ClientRegistrationResponse.toModel(): ClientRegistrationInfo =
+    private fun ClientRegistrationResponse.toModel(
+        tokenEndpointAuthMethod: OAuthClientAuthenticationMethod
+    ): ClientRegistrationInfo =
         ClientRegistrationInfo(
             clientId = this.clientId,
             clientSecret = this.clientSecret,
             clientIdIssuedAt = this.clientIdIssuedAt,
-            clientSecretExpiration = this.clientSecretExpiration
+            clientSecretExpiration = this.clientSecretExpiration,
+            tokenEndpointAuthMethod = tokenEndpointAuthMethod,
         )
 }

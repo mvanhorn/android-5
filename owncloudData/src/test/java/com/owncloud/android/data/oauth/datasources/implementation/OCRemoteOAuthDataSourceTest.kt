@@ -31,6 +31,7 @@ import com.owncloud.android.lib.resources.oauth.responses.ClientRegistrationResp
 import com.owncloud.android.lib.resources.oauth.responses.OIDCDiscoveryResponse
 import com.owncloud.android.lib.resources.oauth.responses.TokenResponse
 import com.owncloud.android.lib.resources.oauth.services.OIDCService
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 import com.owncloud.android.testutil.OC_SECURE_BASE_URL
 import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION
 import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION_REQUEST
@@ -135,6 +136,9 @@ class OCRemoteOAuthDataSourceTest {
 
     @Test
     fun `registerClient returns a ClientRegistrationInfo`() {
+        val registrationRequest = OC_CLIENT_REGISTRATION_REQUEST.copy(
+            tokenEndpointAuthMethod = OAuthClientAuthenticationMethod.CLIENT_SECRET_POST.value
+        )
         val clientRegistrationResponse: RemoteOperationResult<ClientRegistrationResponse> =
             createRemoteOperationResultMock(data = OC_REMOTE_CLIENT_REGISTRATION_RESPONSE, isSuccess = true)
 
@@ -142,14 +146,22 @@ class OCRemoteOAuthDataSourceTest {
             oidcService.registerClientWithRegistrationEndpoint(ocClientMocked, any())
         } returns clientRegistrationResponse
 
-        val clientRegistrationInfo = remoteOAuthDataSource.registerClient(OC_CLIENT_REGISTRATION_REQUEST)
+        val clientRegistrationInfo = remoteOAuthDataSource.registerClient(registrationRequest)
 
         assertNotNull(clientRegistrationInfo)
-        assertEquals(OC_CLIENT_REGISTRATION, clientRegistrationInfo)
+        assertEquals(
+            OC_CLIENT_REGISTRATION.copy(tokenEndpointAuthMethod = OAuthClientAuthenticationMethod.CLIENT_SECRET_POST),
+            clientRegistrationInfo
+        )
 
         verify(exactly = 1) {
-            clientManager.getClientForAnonymousCredentials(OC_CLIENT_REGISTRATION_REQUEST.registrationEndpoint, false)
-            oidcService.registerClientWithRegistrationEndpoint(ocClientMocked, any())
+            clientManager.getClientForAnonymousCredentials(registrationRequest.registrationEndpoint, false)
+            oidcService.registerClientWithRegistrationEndpoint(
+                ocClientMocked,
+                match {
+                    it.tokenEndpointAuthMethod == OAuthClientAuthenticationMethod.CLIENT_SECRET_POST.value
+                }
+            )
         }
     }
 }

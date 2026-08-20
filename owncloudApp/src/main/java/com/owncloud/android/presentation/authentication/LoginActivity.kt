@@ -53,6 +53,7 @@ import com.owncloud.android.MainApp.Companion.accountType
 import com.owncloud.android.R
 import com.owncloud.android.data.authentication.KEY_USER_ID
 import com.owncloud.android.databinding.AccountSetupBinding
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
 import com.owncloud.android.domain.authentication.oauth.model.ResponseType
 import com.owncloud.android.domain.authentication.oauth.model.TokenRequest
 import com.owncloud.android.domain.authentication.oauth.model.TokenResponse
@@ -406,7 +407,8 @@ class LoginActivity : AppCompatActivity(), SslUntrustedCertDialog.OnSslUntrusted
                 if (registrationEndpoint != null) {
                     registerClient(
                         authorizationEndpoint = serverInfo.oidcServerConfiguration.authorizationEndpoint.toUri(),
-                        registrationEndpoint = registrationEndpoint
+                        registrationEndpoint = registrationEndpoint,
+                        tokenEndpointAuthMethod = serverInfo.oidcServerConfiguration.getClientAuthenticationMethodForRegistration(),
                     )
                 } else {
                     performGetAuthorizationCodeRequest(serverInfo.oidcServerConfiguration.authorizationEndpoint.toUri())
@@ -520,9 +522,10 @@ class LoginActivity : AppCompatActivity(), SslUntrustedCertDialog.OnSslUntrusted
      */
     private fun registerClient(
         authorizationEndpoint: Uri,
-        registrationEndpoint: String
+        registrationEndpoint: String,
+        tokenEndpointAuthMethod: OAuthClientAuthenticationMethod,
     ) {
-        authenticationViewModel.registerClient(registrationEndpoint)
+        authenticationViewModel.registerClient(registrationEndpoint, tokenEndpointAuthMethod)
         authenticationViewModel.registerClient.observe(this) {
             when (val uiResult = it.peekContent()) {
                 is UIResult.Loading -> {}
@@ -663,12 +666,16 @@ class LoginActivity : AppCompatActivity(), SslUntrustedCertDialog.OnSslUntrusted
 
         var clientId: String? = null
         var clientSecret: String? = null
-        var useAuthorizationHeader = true
+        var useAuthorizationHeader = clientRegistrationInfo?.tokenEndpointAuthMethod?.useAuthorizationHeader ?: true
 
         val serverInfo = authenticationViewModel.serverInfo.value?.peekContent()?.getStoredData()
         if (serverInfo is ServerInfo.OIDCServer) {
             tokenEndPoint = serverInfo.oidcServerConfiguration.tokenEndpoint
-            if (serverInfo.oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost()) {
+            val shouldUseClientSecretPost = clientRegistrationInfo?.tokenEndpointAuthMethod ==
+                OAuthClientAuthenticationMethod.CLIENT_SECRET_POST ||
+                clientRegistrationInfo == null &&
+                serverInfo.oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost()
+            if (shouldUseClientSecretPost) {
                 val defaultClientId = if (isKiteworksServer) R.string.kiteworks_client_id else R.string.oauth2_client_id
                 val defaultClientSecret = if (isKiteworksServer) R.string.kiteworks_client_secret else R.string.oauth2_client_secret
 

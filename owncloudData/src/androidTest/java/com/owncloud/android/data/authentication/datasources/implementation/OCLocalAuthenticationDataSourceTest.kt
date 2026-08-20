@@ -27,6 +27,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_CLIENT_EXPIRATION_DATE
 import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_CLIENT_ID
 import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_CLIENT_SECRET
+import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD
 import com.owncloud.android.data.authentication.KEY_OAUTH2_REFRESH_TOKEN
 import com.owncloud.android.data.authentication.KEY_OAUTH2_SCOPE
 import com.owncloud.android.data.authentication.SELECTED_ACCOUNT
@@ -409,6 +410,11 @@ class OCLocalAuthenticationDataSourceTest {
             accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_SECRET, clientInfo.clientSecret)
             accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_ID, clientInfo.clientId)
             accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_EXPIRATION_DATE, clientInfo.clientSecretExpiration.toString())
+            accountManager.setUserData(
+                account,
+                KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD,
+                clientInfo.tokenEndpointAuthMethod.value
+            )
         }
     }
 

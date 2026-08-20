@@ -28,6 +28,7 @@ import android.app.Activity.RESULT_OK
 import android.app.Instrumentation
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.MutableLiveData
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -49,6 +50,10 @@ import com.owncloud.android.domain.exceptions.NoNetworkConnectionException
 import com.owncloud.android.domain.exceptions.OwncloudVersionNotSupportedException
 import com.owncloud.android.domain.exceptions.ServerNotReachableException
 import com.owncloud.android.domain.exceptions.UnauthorizedException
+import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationInfo
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod
+import com.owncloud.android.domain.authentication.oauth.model.TokenRequest
+import com.owncloud.android.domain.authentication.oauth.model.TokenResponse
 import com.owncloud.android.domain.server.model.ServerInfo
 import com.owncloud.android.domain.utils.Event
 import com.owncloud.android.extensions.parseError
@@ -74,6 +79,8 @@ import com.owncloud.android.testutil.OC_BASIC_USERNAME
 import com.owncloud.android.testutil.OC_INSECURE_SERVER_INFO_BASIC_AUTH
 import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BASIC_AUTH
 import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BEARER_AUTH
+import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_OIDC_AUTH
+import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION
 import com.owncloud.android.utils.CONFIGURATION_SERVER_URL
 import com.owncloud.android.utils.CONFIGURATION_SERVER_URL_INPUT_VISIBILITY
 import com.owncloud.android.utils.NO_MDM_RESTRICTION_YET
@@ -117,6 +124,8 @@ class LoginActivityTest {
     private lateinit var supportsOauth2LiveData: MutableLiveData<Event<UIResult<Boolean>>>
     private lateinit var baseUrlLiveData: MutableLiveData<Event<UIResult<String>>>
     private lateinit var accountDiscoveryLiveData: MutableLiveData<Event<UIResult<Unit>>>
+    private lateinit var registerClientLiveData: MutableLiveData<Event<UIResult<ClientRegistrationInfo>>>
+    private lateinit var requestTokenLiveData: MutableLiveData<Event<UIResult<TokenResponse>>>
 
     @Before
     fun setUp() {
@@ -133,12 +142,19 @@ class LoginActivityTest {
         supportsOauth2LiveData = MutableLiveData()
         baseUrlLiveData = MutableLiveData()
         accountDiscoveryLiveData = MutableLiveData()
+        registerClientLiveData = MutableLiveData()
+        requestTokenLiveData = MutableLiveData()
 
         every { authenticationViewModel.loginResult } returns loginResultLiveData
         every { authenticationViewModel.serverInfo } returns serverInfoLiveData
         every { authenticationViewModel.supportsOAuth2 } returns supportsOauth2LiveData
         every { authenticationViewModel.baseUrl } returns baseUrlLiveData
         every { authenticationViewModel.accountDiscovery } returns accountDiscoveryLiveData
+        every { authenticationViewModel.registerClient } returns registerClientLiveData
+        every { authenticationViewModel.requestToken } returns requestTokenLiveData
+        every { authenticationViewModel.codeChallenge } returns "code-challenge"
+        every { authenticationViewModel.codeVerifier } returns "code-verifier"
+        every { authenticationViewModel.oidcState } returns "oidc-state"
         every { settingsViewModel.isThereAttachedAccount() } returns false
 
         stopKoin()
@@ -362,6 +378,80 @@ class LoginActivityTest {
         serverInfoLiveData.postValue(Event(UIResult.Success(SECURE_SERVER_INFO_BEARER)))
 
         checkBearerFieldsVisibility()
+        Intents.release()
+    }
+
+    @Test
+    fun checkServerInfo_isSuccess_OIDC_prefersBasicForDynamicRegistration() {
+        launchTest()
+
+        serverInfoLiveData.postValue(Event(UIResult.Success(OC_SECURE_SERVER_INFO_OIDC_AUTH)))
+
+        verify(exactly = 1) {
+            authenticationViewModel.registerClient(
+                OC_SECURE_SERVER_INFO_OIDC_AUTH.oidcServerConfiguration.registrationEndpoint!!,
+                OAuthClientAuthenticationMethod.CLIENT_SECRET_BASIC
+            )
+        }
+    }
+
+    @Test
+    fun authorizationCodeExchange_reusesPostFromDynamicRegistration() {
+        assertAuthorizationCodeExchangeUsesRegistrationMethod(
+            supportedMethods = listOf(OAuthClientAuthenticationMethod.CLIENT_SECRET_POST.value),
+            expectedMethod = OAuthClientAuthenticationMethod.CLIENT_SECRET_POST
+        )
+    }
+
+    @Test
+    fun authorizationCodeExchange_prefersBasicFromDynamicRegistration() {
+        assertAuthorizationCodeExchangeUsesRegistrationMethod(
+            supportedMethods = listOf(
+                OAuthClientAuthenticationMethod.CLIENT_SECRET_POST.value,
+                OAuthClientAuthenticationMethod.CLIENT_SECRET_BASIC.value
+            ),
+            expectedMethod = OAuthClientAuthenticationMethod.CLIENT_SECRET_BASIC
+        )
+    }
+
+    private fun assertAuthorizationCodeExchangeUsesRegistrationMethod(
+        supportedMethods: List<String>,
+        expectedMethod: OAuthClientAuthenticationMethod,
+    ) {
+        val serverConfiguration = OC_SECURE_SERVER_INFO_OIDC_AUTH.oidcServerConfiguration.copy(
+            tokenEndpointAuthMethodsSupported = supportedMethods
+        )
+        val serverInfo = ServerInfo.OIDCServer(
+            ownCloudVersion = OC_SECURE_SERVER_INFO_OIDC_AUTH.ownCloudVersion,
+            baseUrl = OC_SECURE_SERVER_INFO_OIDC_AUTH.baseUrl,
+            oidcServerConfiguration = serverConfiguration
+        )
+        val clientRegistrationInfo = OC_CLIENT_REGISTRATION.copy(
+            tokenEndpointAuthMethod = expectedMethod
+        )
+
+        Intents.init()
+        launchTest()
+        avoidOpeningChromeCustomTab()
+        serverInfoLiveData.postValue(Event(UIResult.Success(serverInfo)))
+        registerClientLiveData.postValue(Event(UIResult.Success(clientRegistrationInfo)))
+
+        activityScenario.onActivity { activity ->
+            activity.onNewIntent(
+                Intent().setData(Uri.parse("owncloud://oauth?code=authorization-code&state=oidc-state"))
+            )
+        }
+
+        val tokenRequest = io.mockk.slot<TokenRequest>()
+        verify(exactly = 1) { authenticationViewModel.requestToken(capture(tokenRequest)) }
+        assertEquals(expectedMethod.useAuthorizationHeader, tokenRequest.captured.useAuthorizationHeader)
+        if (expectedMethod == OAuthClientAuthenticationMethod.CLIENT_SECRET_POST) {
+            assertEquals(clientRegistrationInfo.clientId, tokenRequest.captured.clientId)
+            assertEquals(clientRegistrationInfo.clientSecret, tokenRequest.captured.clientSecret)
+        } else {
+            assertEquals(null, tokenRequest.captured.clientId)
+            assertEquals(null, tokenRequest.captured.clientSecret)
+        }
         Intents.release()
     }
 

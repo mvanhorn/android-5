@@ -41,6 +41,7 @@ import com.owncloud.android.domain.UseCaseResult;
 import com.owncloud.android.domain.authentication.oauth.OIDCDiscoveryUseCase;
 import com.owncloud.android.domain.authentication.oauth.RequestTokenUseCase;
 import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration;
+import com.owncloud.android.domain.authentication.oauth.model.OAuthClientAuthenticationMethod;
 import com.owncloud.android.domain.authentication.oauth.model.TokenRequest;
 import com.owncloud.android.domain.authentication.oauth.model.TokenResponse;
 import com.owncloud.android.lib.common.accounts.AccountTypeUtils;
@@ -54,6 +55,7 @@ import java.io.File;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_CLIENT_EXPIRATION_DATE;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_CLIENT_ID;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_CLIENT_SECRET;
+import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_OAUTH2_REFRESH_TOKEN;
 import static com.owncloud.android.presentation.authentication.AuthenticatorConstants.KEY_AUTH_TOKEN_TYPE;
 import static org.koin.java.KoinJavaComponent.inject;
@@ -343,6 +345,10 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
         String clientId = accountManager.getUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_ID);
         String clientSecret = accountManager.getUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_SECRET);
+        boolean hasDynamicClientRegistration = clientId != null && clientSecret != null;
+        String storedClientAuthenticationMethod = hasDynamicClientRegistration
+                ? accountManager.getUserData(account, KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD)
+                : null;
 
         String clientIdForRequest = null;
         String clientSecretForRequest = null;
@@ -373,18 +379,22 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
             // Use token endpoint retrieved from oidc discovery
             tokenEndpoint = oidcServerConfigurationUseCaseResult.getDataOrNull().getTokenEndpoint();
-
-            if (oidcServerConfigurationUseCaseResult.getDataOrNull() != null &&
-            oidcServerConfigurationUseCaseResult.getDataOrNull().isTokenEndpointAuthMethodSupportedClientSecretPost()) {
-                clientIdForRequest = clientId;
-                clientSecretForRequest = clientSecret;
-                useAuthorizationHeader = false;
-            }
         } else {
             Timber.d("OIDC Discovery failed. Server discovery info: [ %s ]",
                     oidcServerConfigurationUseCaseResult.getThrowableOrNull().toString());
 
             tokenEndpoint = baseUrl + File.separator + mContext.getString(R.string.oauth2_url_endpoint_access);
+        }
+
+        OAuthClientAuthenticationMethod clientAuthenticationMethod = getClientAuthenticationMethod(
+                hasDynamicClientRegistration,
+                storedClientAuthenticationMethod,
+                oidcServerConfigurationUseCaseResult.getDataOrNull()
+        );
+        if (clientAuthenticationMethod == OAuthClientAuthenticationMethod.CLIENT_SECRET_POST) {
+            clientIdForRequest = clientId;
+            clientSecretForRequest = clientSecret;
+            useAuthorizationHeader = false;
         }
 
         String clientAuth = OAuthUtils.Companion.getClientAuth(clientSecret, clientId);
@@ -420,6 +430,23 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
             Timber.e(tokenResponseResult.getThrowableOrNull(), "OAuth request to refresh access token failed. Preparing to access Login Activity");
             return null;
         }
+    }
+
+    static OAuthClientAuthenticationMethod getClientAuthenticationMethod(
+            boolean hasDynamicClientRegistration,
+            String storedClientAuthenticationMethod,
+            OIDCServerConfiguration oidcServerConfiguration
+    ) {
+        if (hasDynamicClientRegistration) {
+            return OAuthClientAuthenticationMethod.fromValueOrDefault(storedClientAuthenticationMethod);
+        }
+
+        if (oidcServerConfiguration != null &&
+                oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost()) {
+            return OAuthClientAuthenticationMethod.CLIENT_SECRET_POST;
+        }
+
+        return OAuthClientAuthenticationMethod.CLIENT_SECRET_BASIC;
     }
 
     private String handleSuccessfulRefreshToken(
