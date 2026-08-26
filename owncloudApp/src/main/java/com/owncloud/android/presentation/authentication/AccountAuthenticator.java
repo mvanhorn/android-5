@@ -383,9 +383,9 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
         }
 
         OIDCServerConfiguration oidcServerConfiguration = oidcServerConfigurationUseCaseResult.getDataOrNull();
-        boolean useClientSecretPost = tokenEndpointAuthMethod != null
-                ? OIDCServerConfiguration.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST.equals(tokenEndpointAuthMethod)
-                : oidcServerConfiguration != null && oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost();
+        boolean useClientSecretPost = oidcServerConfiguration != null
+                ? oidcServerConfiguration.shouldUseClientSecretPost(tokenEndpointAuthMethod)
+                : OIDCServerConfiguration.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST.equals(tokenEndpointAuthMethod);
         if (useClientSecretPost) {
             clientIdForRequest = clientId;
             clientSecretForRequest = clientSecret;

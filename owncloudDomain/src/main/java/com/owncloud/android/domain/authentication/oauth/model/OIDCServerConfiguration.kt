@@ -46,6 +46,10 @@ data class OIDCServerConfiguration(
             else -> TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
         }
 
+    fun shouldUseClientSecretPost(tokenEndpointAuthMethod: String?): Boolean =
+        tokenEndpointAuthMethod?.let { it == TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST }
+            ?: isTokenEndpointAuthMethodSupportedClientSecretPost()
+
     companion object {
         const val TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC = "client_secret_basic"
         const val TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST = "client_secret_post"

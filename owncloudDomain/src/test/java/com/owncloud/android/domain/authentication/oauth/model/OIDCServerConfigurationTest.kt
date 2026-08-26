@@ -22,6 +22,8 @@ import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfigur
 import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
 import com.owncloud.android.testutil.oauth.OC_OIDC_SERVER_CONFIGURATION
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OIDCServerConfigurationTest {
@@ -66,6 +68,39 @@ class OIDCServerConfigurationTest {
         val configuration = buildConfiguration(tokenEndpointAuthMethodsSupported = listOf("client_secret_jwt"))
 
         assertEquals(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC, configuration.getClientRegistrationTokenEndpointAuthMethod())
+    }
+
+    @Test
+    fun `token request uses persisted basic method even when post is advertised`() {
+        val configuration = buildConfiguration(
+            tokenEndpointAuthMethodsSupported = listOf(
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST,
+            )
+        )
+
+        assertFalse(configuration.shouldUseClientSecretPost(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC))
+    }
+
+    @Test
+    fun `token request uses persisted post method even when post is not advertised`() {
+        val configuration = buildConfiguration(
+            tokenEndpointAuthMethodsSupported = listOf(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC)
+        )
+
+        assertTrue(configuration.shouldUseClientSecretPost(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST))
+    }
+
+    @Test
+    fun `legacy token request uses discovery based post behavior when no method is persisted`() {
+        val configuration = buildConfiguration(
+            tokenEndpointAuthMethodsSupported = listOf(
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST,
+            )
+        )
+
+        assertTrue(configuration.shouldUseClientSecretPost(null))
     }
 
     private fun buildConfiguration(tokenEndpointAuthMethodsSupported: List<String>?): OIDCServerConfiguration =
