@@ -57,11 +57,10 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.koin.core.component.getScopeName
 import org.koin.core.parameter.parametersOf
 import timber.log.Timber
-import java.io.BufferedWriter
 import java.io.FileInputStream
 import java.io.IOException
-import java.io.StringWriter
-import java.util.Scanner
+import java.io.InputStreamReader
+import java.io.Reader
 
 class PreviewTextFragment : FileFragment() {
     private var account: Account? = null
@@ -278,7 +277,7 @@ class PreviewTextFragment : FileFragment() {
         var textLayout: View,
         var tabLayout: TabLayout,
         var viewPager: ViewPager2
-    ) : AsyncTask<OCFile, Unit, StringWriter>() {
+    ) : AsyncTask<OCFile, Unit, TextPreview>() {
 
         private val dialogWaitTag = "DIALOG_WAIT"
         private lateinit var mimeType: String
@@ -287,7 +286,7 @@ class PreviewTextFragment : FileFragment() {
             showLoadingDialog()
         }
 
-        override fun doInBackground(vararg params: OCFile?): StringWriter {
+        override fun doInBackground(vararg params: OCFile?): TextPreview {
             if (params.size != 1) {
                 throw IllegalArgumentException("The parameter to ${this.getScopeName()} must be (1) the file location")
             }
@@ -296,43 +295,21 @@ class PreviewTextFragment : FileFragment() {
             val location = file.storagePath
             mimeType = file.mimeType
 
-            var inputStream: FileInputStream? = null
-            var scanner: Scanner? = null
-            val source = StringWriter()
-            val bufferedWriter = BufferedWriter(source)
-
-            try {
-                inputStream = FileInputStream(location)
-                scanner = Scanner(inputStream)
-                while (scanner.hasNextLine()) {
-                    bufferedWriter.append(scanner.nextLine())
-                    if (scanner.hasNextLine()) {
-                        bufferedWriter.append("\n")
-                    }
-                }
-                bufferedWriter.close()
-                val exc = scanner.ioException()
-                if (exc != null) {
-                    throw exc
+            return try {
+                InputStreamReader(FileInputStream(location)).use { reader ->
+                    readTextPreview(reader)
                 }
             } catch (e: IOException) {
                 Timber.e(e)
-            } finally {
-                if (inputStream != null) {
-                    try {
-                        inputStream.close()
-                    } catch (e: IOException) {
-                        Timber.e(e)
-                    }
-                }
-                scanner?.close()
+                TextPreview("", false)
             }
-            return source
         }
 
-        override fun onPostExecute(result: StringWriter) {
-            val text = String(result.buffer)
-            showPreviewText(text, mimeType, rootView, textViewReference, textLayout, tabLayout, viewPager)
+        override fun onPostExecute(result: TextPreview) {
+            showPreviewText(result.text, mimeType, rootView, textViewReference, textLayout, tabLayout, viewPager)
+            truncationNotice(result)?.let { notice ->
+                Snackbar.make(rootView, notice, Snackbar.LENGTH_LONG).show()
+            }
 
             try {
                 dismissLoadingDialog()
@@ -407,10 +384,36 @@ class PreviewTextFragment : FileFragment() {
 
 
     companion object {
+        private const val MAX_PREVIEW_CHARACTERS = 1024 * 1024
         private const val EXTRA_FILE = "FILE"
         private const val EXTRA_ACCOUNT = "ACCOUNT"
         var isOpen = false
         var currentFilePreviewing: OCFile? = null
+
+        internal data class TextPreview(val text: String, val isTruncated: Boolean)
+
+        internal fun readTextPreview(reader: Reader, maxCharacters: Int = MAX_PREVIEW_CHARACTERS): TextPreview {
+            require(maxCharacters > 0) { "The preview character limit must be positive" }
+
+            val text = StringBuilder(minOf(DEFAULT_BUFFER_SIZE, maxCharacters))
+            val buffer = CharArray(minOf(DEFAULT_BUFFER_SIZE, maxCharacters))
+            var remainingCharacters = maxCharacters
+
+            while (remainingCharacters > 0) {
+                val charactersRead = reader.read(buffer, 0, minOf(buffer.size, remainingCharacters))
+                if (charactersRead == -1) {
+                    return TextPreview(text.toString(), false)
+                }
+
+                text.append(buffer, 0, charactersRead)
+                remainingCharacters -= charactersRead
+            }
+
+            return TextPreview(text.toString(), reader.read(buffer, 0, 1) != -1)
+        }
+
+        internal fun truncationNotice(preview: TextPreview): Int? =
+            if (preview.isTruncated) R.string.text_preview_truncated else null
 
         fun newInstance(file: OCFile, account: Account): PreviewTextFragment {
             val args = Bundle().apply {
@@ -441,4 +444,3 @@ class PreviewTextFragment : FileFragment() {
         }
     }
 }
-
