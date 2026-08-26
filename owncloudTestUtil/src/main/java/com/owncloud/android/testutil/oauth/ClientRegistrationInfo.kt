@@ -19,6 +19,7 @@
 package com.owncloud.android.testutil.oauth
 
 import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationInfo
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
 import com.owncloud.android.testutil.OC_CLIENT_ID
 import com.owncloud.android.testutil.OC_CLIENT_SECRET
 import com.owncloud.android.testutil.OC_CLIENT_SECRET_EXPIRATION
@@ -27,5 +28,6 @@ val OC_CLIENT_REGISTRATION = ClientRegistrationInfo(
     clientId = OC_CLIENT_ID,
     clientSecret = OC_CLIENT_SECRET,
     clientIdIssuedAt = null,
-    clientSecretExpiration = OC_CLIENT_SECRET_EXPIRATION
+    clientSecretExpiration = OC_CLIENT_SECRET_EXPIRATION,
+    tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
 )

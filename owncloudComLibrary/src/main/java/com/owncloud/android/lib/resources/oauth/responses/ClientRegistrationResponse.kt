@@ -39,4 +39,6 @@ data class ClientRegistrationResponse(
     val clientIdIssuedAt: Int?,
     @Json(name = "client_secret_expires_at")
     val clientSecretExpiration: Int,
+    @Json(name = "token_endpoint_auth_method")
+    val tokenEndpointAuthMethod: String? = null,
 )

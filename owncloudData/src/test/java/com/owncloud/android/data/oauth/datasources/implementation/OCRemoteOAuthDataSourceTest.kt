@@ -25,8 +25,11 @@ import com.owncloud.android.data.ClientManager
 import com.owncloud.android.data.oauth.OC_REMOTE_CLIENT_REGISTRATION_RESPONSE
 import com.owncloud.android.data.oauth.OC_REMOTE_OIDC_DISCOVERY_RESPONSE
 import com.owncloud.android.data.oauth.OC_REMOTE_TOKEN_RESPONSE
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
 import com.owncloud.android.lib.common.OwnCloudClient
 import com.owncloud.android.lib.common.operations.RemoteOperationResult
+import com.owncloud.android.lib.resources.oauth.params.ClientRegistrationParams
 import com.owncloud.android.lib.resources.oauth.responses.ClientRegistrationResponse
 import com.owncloud.android.lib.resources.oauth.responses.OIDCDiscoveryResponse
 import com.owncloud.android.lib.resources.oauth.responses.TokenResponse
@@ -41,6 +44,7 @@ import com.owncloud.android.testutil.oauth.OC_TOKEN_RESPONSE
 import com.owncloud.android.utils.createRemoteOperationResultMock
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -134,7 +138,43 @@ class OCRemoteOAuthDataSourceTest {
     }
 
     @Test
-    fun `registerClient returns a ClientRegistrationInfo`() {
+    fun `registerClient returns server token endpoint auth method`() {
+        val clientRegistrationParams = slot<ClientRegistrationParams>()
+        val clientRegistrationRequest = OC_CLIENT_REGISTRATION_REQUEST.copy(
+            tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
+        )
+        val clientRegistrationResponse: RemoteOperationResult<ClientRegistrationResponse> =
+            createRemoteOperationResultMock(
+                data = OC_REMOTE_CLIENT_REGISTRATION_RESPONSE.copy(
+                    tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
+                ),
+                isSuccess = true,
+            )
+
+        every {
+            oidcService.registerClientWithRegistrationEndpoint(ocClientMocked, capture(clientRegistrationParams))
+        } returns clientRegistrationResponse
+
+        val clientRegistrationInfo = remoteOAuthDataSource.registerClient(clientRegistrationRequest)
+
+        assertNotNull(clientRegistrationInfo)
+        assertEquals(
+            OC_CLIENT_REGISTRATION.copy(tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC),
+            clientRegistrationInfo,
+        )
+        assertEquals(clientRegistrationRequest.tokenEndpointAuthMethod, clientRegistrationParams.captured.tokenEndpointAuthMethod)
+
+        verify(exactly = 1) {
+            clientManager.getClientForAnonymousCredentials(clientRegistrationRequest.registrationEndpoint, false)
+            oidcService.registerClientWithRegistrationEndpoint(ocClientMocked, any())
+        }
+    }
+
+    @Test
+    fun `registerClient falls back to requested token endpoint auth method when response omits it`() {
+        val clientRegistrationRequest = OC_CLIENT_REGISTRATION_REQUEST.copy(
+            tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
+        )
         val clientRegistrationResponse: RemoteOperationResult<ClientRegistrationResponse> =
             createRemoteOperationResultMock(data = OC_REMOTE_CLIENT_REGISTRATION_RESPONSE, isSuccess = true)
 
@@ -142,14 +182,11 @@ class OCRemoteOAuthDataSourceTest {
             oidcService.registerClientWithRegistrationEndpoint(ocClientMocked, any())
         } returns clientRegistrationResponse
 
-        val clientRegistrationInfo = remoteOAuthDataSource.registerClient(OC_CLIENT_REGISTRATION_REQUEST)
+        val clientRegistrationInfo = remoteOAuthDataSource.registerClient(clientRegistrationRequest)
 
-        assertNotNull(clientRegistrationInfo)
-        assertEquals(OC_CLIENT_REGISTRATION, clientRegistrationInfo)
-
-        verify(exactly = 1) {
-            clientManager.getClientForAnonymousCredentials(OC_CLIENT_REGISTRATION_REQUEST.registrationEndpoint, false)
-            oidcService.registerClientWithRegistrationEndpoint(ocClientMocked, any())
-        }
+        assertEquals(
+            OC_CLIENT_REGISTRATION.copy(tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST),
+            clientRegistrationInfo,
+        )
     }
 }

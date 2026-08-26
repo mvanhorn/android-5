@@ -25,6 +25,7 @@ import com.owncloud.android.R
 import com.owncloud.android.domain.UseCaseResult
 import com.owncloud.android.domain.authentication.oauth.RegisterClientUseCase
 import com.owncloud.android.domain.authentication.oauth.RequestTokenUseCase
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
 import com.owncloud.android.domain.authentication.usecases.GetBaseUrlUseCase
 import com.owncloud.android.domain.authentication.usecases.LoginBasicAsyncUseCase
 import com.owncloud.android.domain.authentication.usecases.LoginOAuthAsyncUseCase
@@ -56,9 +57,11 @@ import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BEARER_AUTH
 import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BEARER_AUTH_WEBFINGER_INSTANCE
 import com.owncloud.android.testutil.OC_WEBFINGER_INSTANCE_URL
 import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION
+import com.owncloud.android.testutil.oauth.OC_CLIENT_REGISTRATION_REQUEST
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
+import io.mockk.mockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -353,5 +356,31 @@ class AuthenticationViewModelTest : ViewModelTest() {
             expectedValues = listOf<Event<UIResult<String>>>(Event(UIResult.Error(commonException))),
             liveData = authenticationViewModel.baseUrl
         )
+    }
+
+    @Test
+    fun registerClientUsesSelectedTokenEndpointAuthMethod() = runTest {
+        val registrationRequest = OC_CLIENT_REGISTRATION_REQUEST.copy(
+            tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
+        )
+        mockkObject(OAuthUtils.Companion)
+        every {
+            OAuthUtils.buildClientRegistrationRequest(
+                registrationEndpoint = registrationRequest.registrationEndpoint,
+                context = any(),
+                tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST,
+            )
+        } returns registrationRequest
+        every { registerClientUseCase(any()) } returns UseCaseResult.Success(OC_CLIENT_REGISTRATION)
+
+        authenticationViewModel.registerClient(
+            registrationEndpoint = registrationRequest.registrationEndpoint,
+            tokenEndpointAuthMethod = TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST,
+        )
+        advanceUntilIdle()
+
+        verify(exactly = 1) {
+            registerClientUseCase(RegisterClientUseCase.Params(registrationRequest))
+        }
     }
 }

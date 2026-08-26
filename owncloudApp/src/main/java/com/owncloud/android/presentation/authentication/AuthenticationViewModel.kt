@@ -231,11 +231,13 @@ class AuthenticationViewModel(
     )
 
     fun registerClient(
-        registrationEndpoint: String
+        registrationEndpoint: String,
+        tokenEndpointAuthMethod: String,
     ) {
         val registrationRequest = OAuthUtils.buildClientRegistrationRequest(
             registrationEndpoint = registrationEndpoint,
-            MainApp.appContext
+            tokenEndpointAuthMethod = tokenEndpointAuthMethod,
+            context = MainApp.appContext,
         )
 
         runUseCaseWithResult(

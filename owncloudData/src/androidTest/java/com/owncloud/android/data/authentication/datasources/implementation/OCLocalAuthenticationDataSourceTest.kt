@@ -27,6 +27,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_CLIENT_EXPIRATION_DATE
 import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_CLIENT_ID
 import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_CLIENT_SECRET
+import com.owncloud.android.data.authentication.KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD
 import com.owncloud.android.data.authentication.KEY_OAUTH2_REFRESH_TOKEN
 import com.owncloud.android.data.authentication.KEY_OAUTH2_SCOPE
 import com.owncloud.android.data.authentication.SELECTED_ACCOUNT
@@ -202,6 +203,30 @@ class OCLocalAuthenticationDataSourceTest {
         verifyOAuthParamsAreUpdated(newAccount, OC_ACCESS_TOKEN, OC_OAUTH_SUPPORTED_TRUE, OC_REFRESH_TOKEN, OC_SCOPE, OC_CLIENT_REGISTRATION, 1)
 
         assertEquals(newAccount.name, newAccountName)
+    }
+
+    @Test
+    fun addOAuthAccountWithoutClientRegistrationDoesNotStoreAuthMethod() {
+        mockRegularAccountCreationFlow()
+        mockSelectedAccountNameInPreferences()
+
+        ocLocalAuthenticationDataSource.addOAuthAccount(
+            OC_ACCOUNT_ID,
+            OC_REDIRECTION_PATH.lastPermanentLocation,
+            OC_AUTH_TOKEN_TYPE,
+            OC_ACCESS_TOKEN,
+            OC_SECURE_SERVER_INFO_BASIC_AUTH,
+            OC_USER_INFO,
+            OC_REFRESH_TOKEN,
+            OC_SCOPE,
+            null,
+            null,
+        )
+
+        val newAccount = Account(OC_ACCOUNT_NAME, OC_ACCOUNT.type)
+        verify(exactly = 0) {
+            accountManager.setUserData(newAccount, KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD, any())
+        }
     }
 
     @Test(expected = AccountNotNewException::class)
@@ -409,6 +434,7 @@ class OCLocalAuthenticationDataSourceTest {
             accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_SECRET, clientInfo.clientSecret)
             accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_ID, clientInfo.clientId)
             accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_EXPIRATION_DATE, clientInfo.clientSecretExpiration.toString())
+            accountManager.setUserData(account, KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD, clientInfo.tokenEndpointAuthMethod)
         }
     }
 

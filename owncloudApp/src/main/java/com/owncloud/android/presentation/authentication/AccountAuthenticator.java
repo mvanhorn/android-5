@@ -54,6 +54,7 @@ import java.io.File;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_CLIENT_EXPIRATION_DATE;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_CLIENT_ID;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_CLIENT_SECRET;
+import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD;
 import static com.owncloud.android.data.authentication.AuthenticationConstantsKt.KEY_OAUTH2_REFRESH_TOKEN;
 import static com.owncloud.android.presentation.authentication.AuthenticatorConstants.KEY_AUTH_TOKEN_TYPE;
 import static org.koin.java.KoinJavaComponent.inject;
@@ -343,6 +344,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
         String clientId = accountManager.getUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_ID);
         String clientSecret = accountManager.getUserData(account, KEY_CLIENT_REGISTRATION_CLIENT_SECRET);
+        String tokenEndpointAuthMethod = accountManager.getUserData(account, KEY_CLIENT_REGISTRATION_TOKEN_ENDPOINT_AUTH_METHOD);
 
         String clientIdForRequest = null;
         String clientSecretForRequest = null;
@@ -373,18 +375,21 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
             // Use token endpoint retrieved from oidc discovery
             tokenEndpoint = oidcServerConfigurationUseCaseResult.getDataOrNull().getTokenEndpoint();
-
-            if (oidcServerConfigurationUseCaseResult.getDataOrNull() != null &&
-            oidcServerConfigurationUseCaseResult.getDataOrNull().isTokenEndpointAuthMethodSupportedClientSecretPost()) {
-                clientIdForRequest = clientId;
-                clientSecretForRequest = clientSecret;
-                useAuthorizationHeader = false;
-            }
         } else {
             Timber.d("OIDC Discovery failed. Server discovery info: [ %s ]",
                     oidcServerConfigurationUseCaseResult.getThrowableOrNull().toString());
 
             tokenEndpoint = baseUrl + File.separator + mContext.getString(R.string.oauth2_url_endpoint_access);
+        }
+
+        OIDCServerConfiguration oidcServerConfiguration = oidcServerConfigurationUseCaseResult.getDataOrNull();
+        boolean useClientSecretPost = tokenEndpointAuthMethod != null
+                ? OIDCServerConfiguration.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST.equals(tokenEndpointAuthMethod)
+                : oidcServerConfiguration != null && oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost();
+        if (useClientSecretPost) {
+            clientIdForRequest = clientId;
+            clientSecretForRequest = clientSecret;
+            useAuthorizationHeader = false;
         }
 
         String clientAuth = OAuthUtils.Companion.getClientAuth(clientSecret, clientId);

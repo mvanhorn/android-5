@@ -36,5 +36,18 @@ data class OIDCServerConfiguration(
     val isKiteworksServer: Boolean = false,
 ) {
     fun isTokenEndpointAuthMethodSupportedClientSecretPost(): Boolean =
-        tokenEndpointAuthMethodsSupported?.any { it == "client_secret_post" } ?: false
+        tokenEndpointAuthMethodsSupported?.contains(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST) == true
+
+    fun getClientRegistrationTokenEndpointAuthMethod(): String =
+        when {
+            tokenEndpointAuthMethodsSupported?.contains(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC) == true ->
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
+            isTokenEndpointAuthMethodSupportedClientSecretPost() -> TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
+            else -> TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
+        }
+
+    companion object {
+        const val TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC = "client_secret_basic"
+        const val TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST = "client_secret_post"
+    }
 }

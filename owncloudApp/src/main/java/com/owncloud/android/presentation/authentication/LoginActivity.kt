@@ -53,6 +53,7 @@ import com.owncloud.android.MainApp.Companion.accountType
 import com.owncloud.android.R
 import com.owncloud.android.data.authentication.KEY_USER_ID
 import com.owncloud.android.databinding.AccountSetupBinding
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration
 import com.owncloud.android.domain.authentication.oauth.model.ResponseType
 import com.owncloud.android.domain.authentication.oauth.model.TokenRequest
 import com.owncloud.android.domain.authentication.oauth.model.TokenResponse
@@ -406,7 +407,8 @@ class LoginActivity : AppCompatActivity(), SslUntrustedCertDialog.OnSslUntrusted
                 if (registrationEndpoint != null) {
                     registerClient(
                         authorizationEndpoint = serverInfo.oidcServerConfiguration.authorizationEndpoint.toUri(),
-                        registrationEndpoint = registrationEndpoint
+                        registrationEndpoint = registrationEndpoint,
+                        tokenEndpointAuthMethod = serverInfo.oidcServerConfiguration.getClientRegistrationTokenEndpointAuthMethod(),
                     )
                 } else {
                     performGetAuthorizationCodeRequest(serverInfo.oidcServerConfiguration.authorizationEndpoint.toUri())
@@ -520,9 +522,10 @@ class LoginActivity : AppCompatActivity(), SslUntrustedCertDialog.OnSslUntrusted
      */
     private fun registerClient(
         authorizationEndpoint: Uri,
-        registrationEndpoint: String
+        registrationEndpoint: String,
+        tokenEndpointAuthMethod: String,
     ) {
-        authenticationViewModel.registerClient(registrationEndpoint)
+        authenticationViewModel.registerClient(registrationEndpoint, tokenEndpointAuthMethod)
         authenticationViewModel.registerClient.observe(this) {
             when (val uiResult = it.peekContent()) {
                 is UIResult.Loading -> {}
@@ -668,7 +671,12 @@ class LoginActivity : AppCompatActivity(), SslUntrustedCertDialog.OnSslUntrusted
         val serverInfo = authenticationViewModel.serverInfo.value?.peekContent()?.getStoredData()
         if (serverInfo is ServerInfo.OIDCServer) {
             tokenEndPoint = serverInfo.oidcServerConfiguration.tokenEndpoint
-            if (serverInfo.oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost()) {
+            val useClientSecretPost = if (clientRegistrationInfo != null) {
+                clientRegistrationInfo.tokenEndpointAuthMethod == OIDCServerConfiguration.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
+            } else {
+                serverInfo.oidcServerConfiguration.isTokenEndpointAuthMethodSupportedClientSecretPost()
+            }
+            if (useClientSecretPost) {
                 val defaultClientId = if (isKiteworksServer) R.string.kiteworks_client_id else R.string.oauth2_client_id
                 val defaultClientSecret = if (isKiteworksServer) R.string.kiteworks_client_secret else R.string.oauth2_client_secret
 

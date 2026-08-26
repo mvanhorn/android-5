@@ -23,17 +23,11 @@ data class ClientRegistrationRequest(
     val registrationEndpoint: String,
     val clientName: String,
     val redirectUris: List<String>,
-    val tokenEndpointAuthMethod: String = CLIENT_REGISTRATION_AUTH_METHOD,
+    val tokenEndpointAuthMethod: String = OIDCServerConfiguration.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
     val applicationType: String = CLIENT_REGISTRATION_APPLICATION_TYPE
 ) {
 
     companion object {
-        /**
-         * The client uses HTTP Basic as defined in OAuth 2.0, Section 2.3.1.
-         * https://tools.ietf.org/html/rfc7591#section-2.3.1
-         * Use this auth method for the moment. We should check if it is allowed in the OIDC Discovery.
-         */
-        private const val CLIENT_REGISTRATION_AUTH_METHOD = "client_secret_basic"
         private const val CLIENT_REGISTRATION_APPLICATION_TYPE = "native"
     }
 }

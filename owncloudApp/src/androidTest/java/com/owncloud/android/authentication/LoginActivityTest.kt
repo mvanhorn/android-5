@@ -45,6 +45,9 @@ import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import com.owncloud.android.R
+import com.owncloud.android.domain.authentication.oauth.model.ClientRegistrationInfo
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC
+import com.owncloud.android.domain.authentication.oauth.model.OIDCServerConfiguration.Companion.TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST
 import com.owncloud.android.domain.exceptions.NoNetworkConnectionException
 import com.owncloud.android.domain.exceptions.OwncloudVersionNotSupportedException
 import com.owncloud.android.domain.exceptions.ServerNotReachableException
@@ -74,6 +77,7 @@ import com.owncloud.android.testutil.OC_BASIC_USERNAME
 import com.owncloud.android.testutil.OC_INSECURE_SERVER_INFO_BASIC_AUTH
 import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BASIC_AUTH
 import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_BEARER_AUTH
+import com.owncloud.android.testutil.OC_SECURE_SERVER_INFO_OIDC_AUTH
 import com.owncloud.android.utils.CONFIGURATION_SERVER_URL
 import com.owncloud.android.utils.CONFIGURATION_SERVER_URL_INPUT_VISIBILITY
 import com.owncloud.android.utils.NO_MDM_RESTRICTION_YET
@@ -117,6 +121,7 @@ class LoginActivityTest {
     private lateinit var supportsOauth2LiveData: MutableLiveData<Event<UIResult<Boolean>>>
     private lateinit var baseUrlLiveData: MutableLiveData<Event<UIResult<String>>>
     private lateinit var accountDiscoveryLiveData: MutableLiveData<Event<UIResult<Unit>>>
+    private lateinit var registerClientLiveData: MutableLiveData<Event<UIResult<ClientRegistrationInfo>>>
 
     @Before
     fun setUp() {
@@ -133,12 +138,14 @@ class LoginActivityTest {
         supportsOauth2LiveData = MutableLiveData()
         baseUrlLiveData = MutableLiveData()
         accountDiscoveryLiveData = MutableLiveData()
+        registerClientLiveData = MutableLiveData()
 
         every { authenticationViewModel.loginResult } returns loginResultLiveData
         every { authenticationViewModel.serverInfo } returns serverInfoLiveData
         every { authenticationViewModel.supportsOAuth2 } returns supportsOauth2LiveData
         every { authenticationViewModel.baseUrl } returns baseUrlLiveData
         every { authenticationViewModel.accountDiscovery } returns accountDiscoveryLiveData
+        every { authenticationViewModel.registerClient } returns registerClientLiveData
         every { settingsViewModel.isThereAttachedAccount() } returns false
 
         stopKoin()
@@ -363,6 +370,51 @@ class LoginActivityTest {
 
         checkBearerFieldsVisibility()
         Intents.release()
+    }
+
+    @Test
+    fun checkServerInfo_isSuccess_OidcPrefersBasicForClientRegistration() {
+        launchTest()
+        val serverInfo = ServerInfo.OIDCServer(
+            baseUrl = OC_SECURE_SERVER_INFO_OIDC_AUTH.baseUrl,
+            ownCloudVersion = OC_SECURE_SERVER_INFO_OIDC_AUTH.ownCloudVersion,
+            oidcServerConfiguration = OC_SECURE_SERVER_INFO_OIDC_AUTH.oidcServerConfiguration.copy(
+                tokenEndpointAuthMethodsSupported = listOf(
+                    TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST,
+                    TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
+                )
+            )
+        )
+
+        serverInfoLiveData.postValue(Event(UIResult.Success(serverInfo)))
+
+        verify(exactly = 1) {
+            authenticationViewModel.registerClient(
+                serverInfo.oidcServerConfiguration.registrationEndpoint!!,
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
+            )
+        }
+    }
+
+    @Test
+    fun checkServerInfo_isSuccess_OidcUsesPostForClientRegistrationWhenBasicIsUnsupported() {
+        launchTest()
+        val serverInfo = ServerInfo.OIDCServer(
+            baseUrl = OC_SECURE_SERVER_INFO_OIDC_AUTH.baseUrl,
+            ownCloudVersion = OC_SECURE_SERVER_INFO_OIDC_AUTH.ownCloudVersion,
+            oidcServerConfiguration = OC_SECURE_SERVER_INFO_OIDC_AUTH.oidcServerConfiguration.copy(
+                tokenEndpointAuthMethodsSupported = listOf(TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST)
+            )
+        )
+
+        serverInfoLiveData.postValue(Event(UIResult.Success(serverInfo)))
+
+        verify(exactly = 1) {
+            authenticationViewModel.registerClient(
+                serverInfo.oidcServerConfiguration.registrationEndpoint!!,
+                TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_POST,
+            )
+        }
     }
 
     @Test
